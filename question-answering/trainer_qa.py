@@ -19,6 +19,9 @@ A subclass of `Trainer` specific to Question-Answering tasks
 from transformers import Trainer, is_torch_tpu_available
 from transformers.trainer_utils import PredictionOutput
 
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+
+
 
 if is_torch_tpu_available(check_device=False):
     import torch_xla.core.xla_model as xm
@@ -103,3 +106,38 @@ class QuestionAnsweringTrainer(Trainer):
         #         metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
 
         return PredictionOutput(predictions=predictions.predictions, label_ids=predictions.label_ids, metrics=metrics)
+
+    def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
+        if self.control.should_log:
+            if is_torch_tpu_available():
+                xm.mark_step()
+
+            logs: Dict[str, float] = {}
+
+            # all_gather + mean() to get average loss over all processes
+            tr_loss_scalar = self._nested_gather(tr_loss).mean().item()
+
+            # reset tr_loss to zero
+            tr_loss -= tr_loss
+
+            logs["loss"] = round(tr_loss_scalar / (self.state.global_step - self._globalstep_last_logged), 4)
+            logs["learning_rate"] = self._get_learning_rate()
+
+            self._total_loss_scalar += tr_loss_scalar
+            self._globalstep_last_logged = self.state.global_step
+            self.store_flos()
+            logs["metrics"] = metrics
+            self.log(logs)
+
+        metrics = None
+        if self.control.should_evaluate:
+            if isinstance(self.eval_dataset, dict):
+                for eval_dataset_name, eval_dataset in self.eval_dataset.items():
+                    metrics = self.evaluate(
+                        eval_dataset=eval_dataset,
+                        ignore_keys=ignore_keys_for_eval,
+                        metric_key_prefix=f"eval_{eval_dataset_name}",
+                    )
+            else:
+                metrics = self.evaluate(ignore_keys=ignore_keys_for_eval)
+            self._report_to_hp_search(trial, self.state.global_step, metrics)
