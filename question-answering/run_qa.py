@@ -28,6 +28,8 @@ from typing import Optional
 import datasets
 from datasets import load_dataset
 
+import pandas as pd
+
 import evaluate
 import transformers
 from trainer_qa import QuestionAnsweringTrainer
@@ -733,18 +735,27 @@ def main():
         logger.info("*** Predict ***")
         results = trainer.predict(predict_dataset, predict_examples)
         
-        print("======= res =======")
-        print(results.predictions)
-        ids = []
-        anss = []
-        for x in results.predictions:
-            ids.append(x["id"])
-            anss.append(x["prediction_text"])
+        # print("======= res =======")
+        # print(results.predictions)
+        output=[]
+        predictions=results.predictions
+        for i in predictions:
+            output.append({"id":i['id'],"answer":i['prediction_text']})
+        #for i in range(len(prediction)):
+        #    output.append({"id":predict_dataset["id"][i],"answer":predict_dataset["answer"][i]["text"]})
+        Pred_File = pd.DataFrame(output)
+        Pred_File.to_csv(data_args.output_file, index=False, encoding='utf-8')
+        
+        # ids = []
+        # anss = []
+        # for x in results.predictions:
+        #     ids.append(x["id"])
+        #     anss.append(x["prediction_text"])
 
-        with open(data_args.output_file, 'w') as f:
-            f.write("id,answer\n")
-            for id, ans in zip(ids, anss):
-                f.write("%s,%s\n" %(id, ans))
+        # with open(data_args.output_file, 'w') as f:
+        #     f.write("id,answer\n")
+        #     for id, ans in zip(ids, anss):
+        #         f.write("%s,%s\n" %(id, ans))
         
         # metrics = results.metrics
 
