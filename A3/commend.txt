@@ -1,0 +1,46 @@
+# training
+python run_summarization.py \
+--do_train \
+--do_eval \
+--model_name_or_path google/mt5-small \
+--source_prefix "summarize: " \
+--train_file data/train.jsonl \
+--validation_file data/public.jsonl \
+--output_dir ckpt1 \
+--per_device_train_batch_size=4 \
+--gradient_accumulation_steps=4 \
+--per_device_eval_batch_size=1 \
+--eval_accumulation_steps=4 \
+--predict_with_generate \
+--text_column maintext \
+--summary_column title \
+--num_train_epochs 2 \
+--fp16 \
+--max_source_length 256 \
+--max_target_length 64 \
+--pad_to_max_length \
+--optim adafactor \
+--overwrite_cache \
+-overwrite_output_dir \
+--cache_dir cache1/ \
+--learning_rate 1e-3
+
+# test
+python run_summarization.py \
+--do_predict \
+--model_name_or_path <TODO> \
+--source_prefix "summarize: " \
+--test_file <test_file> \
+--output_file <output_file> \
+--output_dir ckpt1 \
+--per_device_eval_batch_size=1 \
+--eval_accumulation_steps=4 \
+--predict_with_generate \
+--text_column maintext \
+--summary_column title \
+--fp16 \
+--max_source_length 256 \
+--max_target_length 64 \
+--pad_to_max_length \
+--optim adafactor \
+--cache_dir cache1/ 
