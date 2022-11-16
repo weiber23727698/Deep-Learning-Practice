@@ -229,6 +229,34 @@ class DataTrainingArguments:
             "which is used during ``evaluate`` and ``predict``."
         },
     )
+    do_sample: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether or not to use sampling ; use greedy decoding otherwise. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    top_k: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "The number of highest probability vocabulary tokens to keep for top-k-filtering. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    top_p: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": "If set to float < 1, only the most probable tokens with probabilities that add up to top_p or higher are kept for generation. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    temperature: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": "The value used to module the next token probabilities. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
     ignore_pad_token_for_loss: bool = field(
         default=True,
         metadata={
@@ -695,41 +723,46 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-    # generate_strategy = {
-    #     "max_length": data_args.val_max_target_length,
-    #     "num_beams": data_args.num_beams,
-    #     "do_sample": data_args.do_sample,
-    #     "top_k": data_args.top_k,
-    #     "top_p": data_args.top_p,
-    #     "temperature": data_args.temperature,
-    # }
+    generate_strategy = {
+        "max_length": data_args.val_max_target_length,
+        "num_beams": data_args.num_beams,
+        "do_sample": data_args.do_sample,
+        "top_k": data_args.top_k,
+        "top_p": data_args.top_p,
+        "temperature": data_args.temperature,
+    }
 
     if training_args.do_predict:
         logger.info("*** Predict ***")
 
+        print(generate_strategy)
         model = model.to("cuda")
         model.eval()
-        testloader = DataLoader(raw_datasets["test"], collate_fn=data_collator, batch_size=training_args.per_device_eval_batch_size)
-        print(raw_datasets["test"])
-        print("dataloader: ")
-        print(testloader)
-        # for i, inputs in enumerate(testloader):
-        #     inputs[""] = inputs[""].to("cuda")
-        #     inputs["attention_mask"] = inputs["attention_mask"].to("cuda")
-        #     outputs = model.generate(
-        #         inputs[""],
-        #         inputs["attention_mask"],
-        #         **generate_strategy
-        #     )
-
-        # Title, ID = [], []
-
-        # with jsonlines.open(data_args.output_file, 'w') as writer:
-        #     for title, id in zip(Title, ID):
-        #         writer.write({
-        #             "title": title,
-        #             "id": id
-        #         })
+        testloader = DataLoader(predict_dataset, collate_fn=data_collator, batch_size=training_args.per_device_eval_batch_size)
+        # features: ['input_ids', 'attention_mask', 'labels'],
+        prediction = []
+        ID = raw_datasets["test"]["id"]
+        for i, inputs in enumerate(testloader):
+            inputs["input_ids"] = inputs["input_ids"].to("cuda")
+            inputs["attention_mask"] = inputs["attention_mask"].to("cuda")
+            outputs = model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                **generate_strategy
+            )
+            # print(inputs["input_ids"].size()) # torch.Size([1, 256])
+            # print(inputs["attention_mask"].size()) # torch.Size([1, 256])
+            # print(outputs.size()) # torch.Size([1, 18])
+            # print(outputs)
+            decode_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+            prediction += decode_output
+        Title = [x.strip() for x in prediction]
+        with jsonlines.open(data_args.output_file, 'w') as writer:
+            for title, id in zip(Title, ID):
+                writer.write({
+                    "title": title,
+                    "id": id
+                })
 
         # predict_results = trainer.predict(
         #     predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
@@ -750,7 +783,7 @@ def main():
         #         )
         #         predictions = [pred.strip() for pred in predictions]
         #         output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
-        #         with open(output_prediction_file, "w") as writer:
+        #         with jsonlines.open(output_prediction_file, "w") as writer:
         #             writer.write("\n".join(predictions))
 
     # return results
