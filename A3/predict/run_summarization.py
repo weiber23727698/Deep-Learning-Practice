@@ -680,6 +680,15 @@ def main():
         return result
 
     # Initialize our Trainer
+    generate_strategy = {
+            "max_length": data_args.val_max_target_length,
+            "num_beams": data_args.num_beams,
+            "do_sample": data_args.do_sample,
+            "top_k": data_args.top_k,
+            "top_p": data_args.top_p,
+            "temperature": data_args.temperature,
+    }
+
     trainer = NewTrainer(
         model=model,
         args=training_args,
@@ -688,6 +697,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+        gen_config= generate_strategy
     )
 
     # Training
@@ -730,14 +740,6 @@ def main():
     if training_args.do_predict:
         logger.info("*** Predict ***")
 
-        generate_strategy = {
-            "max_length": data_args.val_max_target_length,
-            "num_beams": data_args.num_beams,
-            "do_sample": data_args.do_sample,
-            "top_k": data_args.top_k,
-            "top_p": data_args.top_p,
-            "temperature": data_args.temperature,
-        }
         # print(generate_strategy)
         model = model.to("cuda")
         model.eval()
@@ -760,7 +762,9 @@ def main():
             # print(outputs)
             decode_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)
             prediction += decode_output
-            print(i)
+            if i % 200 == 0:
+                print(i)
+        print()
         Title = [x.strip() for x in prediction]
         with jsonlines.open(data_args.output_file, 'w') as writer:
             for title, id in zip(Title, ID):

@@ -1,3 +1,8 @@
+import torch
+from packaging import version
+from torch import nn
+from torch.utils.data.dataset import Dataset
+
 from transformers import Trainer, is_torch_tpu_available
 from transformers.trainer_utils import PredictionOutput
 
@@ -25,6 +30,51 @@ if is_torch_tpu_available():
     import torch_xla.debug.metrics as met
 
 class NewTrainer(Seq2SeqTrainer):
+    def __init__(self, *args, eval_examples=None, gen_config=None, post_process_function=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.eval_examples = eval_examples
+        self.gen_config = gen_config
+        # self.post_process_function = post_process_function
+    def prediction_step(
+        self,
+        model: nn.Module,
+        inputs: Dict[str, Union[torch.Tensor, Any]],
+        prediction_loss_only: bool,
+        ignore_keys: Optional[List[str]] = None,
+    ) -> Tuple[Optional[float], Optional[torch.Tensor], Optional[torch.Tensor]]:
+        
+        inputs = self._prepare_inputs(inputs)
+
+        gen_kwargs = {
+            **self.gen_config
+        }
+
+        if self.args.predict_with_generate and not self.args.prediction_loss_only:
+            generated_tokens = self.model.generate(
+                inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                **gen_kwargs,
+            )
+            # in case the batch is shorter than max length, the output should be padded
+            if generated_tokens.shape[-1] < gen_kwargs["max_length"]:
+                generated_tokens = self._pad_tensors_to_max_len(generated_tokens, gen_kwargs["max_length"])
+
+        labels = inputs.pop("labels")
+        with torch.no_grad():
+            # compute loss on predict data
+            loss, logits = self._compute_loss(model, inputs, labels)
+
+        loss = loss.mean().detach()
+        if self.args.prediction_loss_only:
+            return (loss, None, None)
+
+        logits = generated_tokens if self.args.predict_with_generate else logits
+
+        if labels.shape[-1] < gen_kwargs["max_length"]:
+            labels = self._pad_tensors_to_max_len(labels, gen_kwargs["max_length"])
+
+        return (loss, logits, labels)
+    
     def _maybe_log_save_evaluate(self, tr_loss, model, trial, epoch, ignore_keys_for_eval):
         if self.control.should_log:
             if is_torch_tpu_available():
