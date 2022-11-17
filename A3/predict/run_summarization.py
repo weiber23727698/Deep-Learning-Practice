@@ -54,6 +54,8 @@ from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, is_offline_mode
 from transformers.utils.versions import require_version
 
+from NewTrainer import NewTrainer
+
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.18.0.dev0")
@@ -672,11 +674,13 @@ def main():
         # # prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         # # result["gen_len"] = np.mean(prediction_lens)
         # # result = {k: round(v, 4) for k, v in result.items()}
+        result = {f"{k1}_{k2}": v2  for k1, v1 in result.items() for k2, v2 in v1.items()}
+
         
         return result
 
     # Initialize our Trainer
-    trainer = Seq2SeqTrainer(
+    trainer = NewTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -723,25 +727,25 @@ def main():
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
 
-    generate_strategy = {
-        "max_length": data_args.val_max_target_length,
-        "num_beams": data_args.num_beams,
-        "do_sample": data_args.do_sample,
-        "top_k": data_args.top_k,
-        "top_p": data_args.top_p,
-        "temperature": data_args.temperature,
-    }
-
     if training_args.do_predict:
         logger.info("*** Predict ***")
 
-        print(generate_strategy)
+        generate_strategy = {
+            "max_length": data_args.val_max_target_length,
+            "num_beams": data_args.num_beams,
+            "do_sample": data_args.do_sample,
+            "top_k": data_args.top_k,
+            "top_p": data_args.top_p,
+            "temperature": data_args.temperature,
+        }
+        # print(generate_strategy)
         model = model.to("cuda")
         model.eval()
         testloader = DataLoader(predict_dataset, collate_fn=data_collator, batch_size=training_args.per_device_eval_batch_size)
         # features: ['input_ids', 'attention_mask', 'labels'],
         prediction = []
         ID = raw_datasets["test"]["id"]
+
         for i, inputs in enumerate(testloader):
             inputs["input_ids"] = inputs["input_ids"].to("cuda")
             inputs["attention_mask"] = inputs["attention_mask"].to("cuda")
@@ -756,6 +760,7 @@ def main():
             # print(outputs)
             decode_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)
             prediction += decode_output
+            print(i)
         Title = [x.strip() for x in prediction]
         with jsonlines.open(data_args.output_file, 'w') as writer:
             for title, id in zip(Title, ID):
