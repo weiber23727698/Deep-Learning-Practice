@@ -29,7 +29,7 @@ import nltk  # Here to have a nice missing dependency error message early on
 import numpy as np
 from datasets import load_dataset, load_metric
 
-
+from torch.utils.data.dataloader import DataLoader
 import jsonlines
 import json
 from tw_rouge import get_rouge
@@ -53,6 +53,8 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version, is_offline_mode
 from transformers.utils.versions import require_version
+
+from NewTrainer import NewTrainer
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -229,6 +231,34 @@ class DataTrainingArguments:
             "which is used during ``evaluate`` and ``predict``."
         },
     )
+    do_sample: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "Whether or not to use sampling ; use greedy decoding otherwise. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    top_k: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "The number of highest probability vocabulary tokens to keep for top-k-filtering. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    top_p: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": "If set to float < 1, only the most probable tokens with probabilities that add up to top_p or higher are kept for generation. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
+    temperature: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": "The value used to module the next token probabilities. This argument will be passed to ``model.generate``, "
+            "which is used during ``evaluate`` and ``predict``."
+        },
+    )
     ignore_pad_token_for_loss: bool = field(
         default=True,
         metadata={
@@ -249,7 +279,7 @@ class DataTrainingArguments:
     )
 
     def __post_init__(self):
-        if self.dataset_name is None and self.train_file is None and self.validation_file is None:
+        if self.dataset_name is None and self.train_file is None and self.validation_file is None and self.test_file is None:
             raise ValueError("Need either a dataset name or a training/validation file.")
         else:
             if self.train_file is not None:
@@ -501,9 +531,9 @@ def main():
     #         raise ValueError(
     #             f"--summary_column' value '{data_args.summary_column}' needs to be one of: {', '.join(column_names)}"
     #         )
-
     text_column = data_args.text_column
     summary_column = data_args.summary_column
+
     # Temporarily set max_target_length for training.
     max_target_length = data_args.max_target_length
     padding = "max_length" if data_args.pad_to_max_length else False
@@ -644,12 +674,22 @@ def main():
         # # prediction_lens = [np.count_nonzero(pred != tokenizer.pad_token_id) for pred in preds]
         # # result["gen_len"] = np.mean(prediction_lens)
         # # result = {k: round(v, 4) for k, v in result.items()}
-        result = {f"{k1}_{k2}": v2 for k1, v1 in result.items() for k2, v2 in v1.items()}
+        result = {f"{k1}_{k2}": v2  for k1, v1 in result.items() for k2, v2 in v1.items()}
+
         
         return result
 
     # Initialize our Trainer
-    trainer = Seq2SeqTrainer(
+    generate_strategy = {
+            "max_length": data_args.val_max_target_length,
+            "num_beams": data_args.num_beams,
+            "do_sample": data_args.do_sample,
+            "top_k": data_args.top_k,
+            "top_p": data_args.top_p,
+            "temperature": data_args.temperature,
+    }
+
+    trainer = NewTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset if training_args.do_train else None,
@@ -657,6 +697,7 @@ def main():
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
+        gen_config= generate_strategy
     )
 
     # Training
@@ -699,29 +740,61 @@ def main():
     if training_args.do_predict:
         logger.info("*** Predict ***")
 
-        # model = model.to("cuda")
+        # print(generate_strategy)
+        model = model.to("cuda")
+        model.eval()
+        testloader = DataLoader(predict_dataset, collate_fn=data_collator, batch_size=training_args.per_device_eval_batch_size)
+        # features: ['input_ids', 'attention_mask', 'labels'],
+        prediction = []
+        ID = raw_datasets["test"]["id"]
 
-        predict_results = trainer.predict(
-            predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
-        )
-        metrics = predict_results.metrics
-        max_predict_samples = (
-            data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
-        )
-        metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
+        for i, inputs in enumerate(testloader):
+            inputs["input_ids"] = inputs["input_ids"].to("cuda")
+            inputs["attention_mask"] = inputs["attention_mask"].to("cuda")
+            outputs = model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                **generate_strategy
+            )
+            # print(inputs["input_ids"].size()) # torch.Size([1, 256])
+            # print(inputs["attention_mask"].size()) # torch.Size([1, 256])
+            # print(outputs.size()) # torch.Size([1, 18])
+            # print(outputs)
+            decode_output = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+            prediction += decode_output
+            # print(".", end="")
+            if i % 200 == 0:
+               print("It is running {i}".format(i=i))
+        print("start to write")
+        Title = [x.strip() for x in prediction]
+        with jsonlines.open(data_args.output_file, 'w') as writer:
+            for title, id in zip(Title, ID):
+                writer.write({
+                    "title": title,
+                    "id": id
+                })
 
-        trainer.log_metrics("predict", metrics)
-        trainer.save_metrics("predict", metrics)
+        # predict_results = trainer.predict(
+        #     predict_dataset, metric_key_prefix="predict", max_length=max_length, num_beams=num_beams
+        # )
+        # metrics = predict_results.metrics
+        # max_predict_samples = (
+        #     data_args.max_predict_samples if data_args.max_predict_samples is not None else len(predict_dataset)
+        # )
+        # metrics["predict_samples"] = min(max_predict_samples, len(predict_dataset))
 
-        if trainer.is_world_process_zero():
-            if training_args.predict_with_generate:
-                predictions = tokenizer.batch_decode(
-                    predict_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
-                )
-                predictions = [pred.strip() for pred in predictions]
-                output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
-                with open(output_prediction_file, "w") as writer:
-                    writer.write("\n".join(predictions))
+        # trainer.log_metrics("predict", metrics)
+        # trainer.save_metrics("predict", metrics)
+
+        # if trainer.is_world_process_zero():
+        #     if training_args.predict_with_generate:
+        #         predictions = tokenizer.batch_decode(
+        #             predict_results.predictions, skip_special_tokens=True, clean_up_tokenization_spaces=True
+        #         )
+        #         predictions = [pred.strip() for pred in predictions]
+        #         output_prediction_file = os.path.join(training_args.output_dir, "generated_predictions.txt")
+        #         with jsonlines.open(output_prediction_file, "w") as writer:
+        #             writer.write("\n".join(predictions))
 
     # return results
 
