@@ -112,7 +112,7 @@ preshed==3.0.5
     # via
     #   spacy
     #   thinc
-protobuf==3.15.6
+protobuf>=3.18.3
     # via
     #   tensorboard
     #   tensorflow
@@ -205,7 +205,7 @@ typing-extensions==3.7.4.3
     #   aiohttp
     #   tensorflow
     #   torch
-urllib3==1.26.3
+urllib3>=1.26.5
     # via requests
 wasabi==0.8.2
     # via
@@ -213,7 +213,7 @@ wasabi==0.8.2
     #   thinc
 Werkzeug>=2.2.3
     # via tensorboard
-wheel==0.36.2
+wheel>=0.38.1
     # via
     #   astunparse
     #   tensorboard
