@@ -8,7 +8,7 @@ absl-py==0.12.0
     # via
     #   tensorboard
     #   tensorflow
-aiohttp==3.7.4.post0
+aiohttp>=3.7.4
     # via fsspec
 astunparse==1.6.3
     # via tensorflow
@@ -44,7 +44,7 @@ flatbuffers==1.12
     # via tensorflow
 fsspec[http]==0.8.7
     # via pytorch-lightning
-future==0.18.2
+future>=0.18.3 # future==0.18.2
     # via pytorch-lightning
 gast==0.3.3
     # via tensorflow
@@ -85,7 +85,7 @@ murmurhash==1.0.5
     #   preshed
     #   spacy
     #   thinc
-numpy==1.19.5
+numpy>=1.22 # numpy==1.19.5
     # via
     #   blis
     #   h5py
@@ -122,7 +122,7 @@ pyasn1==0.4.8
     # via
     #   pyasn1-modules
     #   rsa
-pydantic==1.7.3
+pydantic>=1.7.4
     # via
     #   spacy
     #   thinc
@@ -134,7 +134,7 @@ PyYAML>=5.4 # pyyaml==5.3.1
     # via pytorch-lightning
 requests-oauthlib==1.3.0
     # via google-auth-oauthlib
-requests==2.25.1
+requests>=2.31.0
     # via
     #   fsspec
     #   requests-oauthlib
@@ -145,7 +145,7 @@ rsa==4.7.2
     # via google-auth
 scikit-learn==0.24.1
     # via seqeval
-scipy==1.6.1
+scipy>=1.10.0
     # via scikit-learn
 seqeval==1.2.2
     # via -r requirements.in
@@ -211,7 +211,7 @@ wasabi==0.8.2
     # via
     #   spacy
     #   thinc
-werkzeug==1.0.1
+Werkzeug>=2.2.3
     # via tensorboard
 wheel==0.36.2
     # via
