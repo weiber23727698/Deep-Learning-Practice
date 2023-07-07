@@ -128,7 +128,7 @@ pydantic==1.7.3
     #   thinc
 pyparsing==2.4.7
     # via packaging
-pytorch-lightning==1.2.3
+pytorch-lightning>=1.6.0 # pytorch-lightning==1.2.3
     # via -r requirements.in
 pyyaml==5.3.1
     # via pytorch-lightning
@@ -187,7 +187,7 @@ thinc==8.0.2
     # via spacy
 threadpoolctl==2.1.0
     # via scikit-learn
-torch==1.7.1
+torch>=1.13.1 # torch==1.7.1
     # via
     #   -r requirements.in
     #   pytorch-lightning
