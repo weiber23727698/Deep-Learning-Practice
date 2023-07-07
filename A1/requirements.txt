@@ -56,7 +56,7 @@ google-auth==1.27.1
     #   tensorboard
 google-pasta==0.2.0
     # via tensorflow
-grpcio==1.32.0
+grpcio>=1.53.0 # grpcio==1.32.0
     # via
     #   tensorboard
     #   tensorflow
@@ -68,7 +68,7 @@ idna==2.10
     #   yarl
 jinja2==2.11.3
     # via spacy
-joblib==1.0.1
+joblib>=1.2.0 # joblib==1.0.1
     # via scikit-learn
 keras-preprocessing==1.1.2
     # via tensorflow
