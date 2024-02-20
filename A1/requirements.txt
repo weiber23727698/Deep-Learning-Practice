@@ -143,7 +143,7 @@ requests>=2.31.0
     #   tensorboard
 rsa==4.7.2
     # via google-auth
-scikit-learn==0.24.1
+scikit-learn==1.0.1
     # via seqeval
 scipy>=1.10.0
     # via scikit-learn
