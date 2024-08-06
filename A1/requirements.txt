@@ -179,7 +179,7 @@ tensorboard==2.4.1
     #   tensorflow
 tensorflow-estimator==2.11.1 # tensorflow-estimator==2.4.0
     # via tensorflow
-tensorflow==2.11.1 # tensorflow==2.4.1
+tensorflow==2.12.1 # tensorflow==2.4.1
     # via -r requirements.in
 termcolor==1.1.0
     # via tensorflow
